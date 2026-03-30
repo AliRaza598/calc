@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fuel Cost Calculator</title>
+    <style>
+        body {
+            font-family: Arial;
+            background: #f5f7fa;
+            margin: 0;
+            padding: 40px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            width: 460px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        h2 {
+            margin-top: 0;
+            text-align: center;
+            color: #333;
+        }
+
+        label {
+            display: block;
+            margin-top: 15px;
+            font-size: 15px;
+            color: #555;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            margin-top: 6px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            font-size: 15px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 25px;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px;
+            font-size: 15px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .calculate-btn {
+            background-color: #007acc;
+            color: white;
+        }
+
+        .calculate-btn:hover {
+            background-color: #005f99;
+        }
+
+        .reset-btn {
+            background-color: #ccc;
+            color: #333;
+        }
+
+        .reset-btn:hover {
+            background-color: #b3b3b3;
+        }
+
+        .history-btn {
+            background-color: #cc3300;
+            color: white;
+            margin-top: 10px;
+        }
+
+        .result {
+            margin-top: 25px;
+            padding: 15px;
+            background-color: #eef2f5;
+            border-radius: 8px;
+            color: #333;
+            font-size: 16px;
+        }
+
+        .history {
+            margin-top: 25px;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        canvas {
+            margin-top: 25px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h2>Fuel Efficiency Calculator</h2>
+
+        <label>Petrol price per liter</label>
+        <input id="price" type="number" step="0.01">
+
+        <label>Kilometers driven</label>
+        <input id="km" type="number" step="0.01">
+
+        <label>Liters used</label>
+        <input id="liters" type="number" step="0.01">
+
+        <div class="button-group">
+            <button class="calculate-btn" onclick="calculate()">Calculate</button>
+            <button class="reset-btn" onclick="resetForm()">Reset</button>
+        </div>
+
+        <div class="result" id="output"></div>
+
+        <canvas id="costChart" width="400" height="250"></canvas>
+
+        <div class="history">
+            <h3>History</h3>
+            <div id="historyList"></div>
+            <button class="history-btn" onclick="clearHistory()">Clear History</button>
+        </div>
+    </div>
+
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        let chart = null;
+
+        function calculate() {
+            let price = parseFloat(document.getElementById("price").value);
+            let km = parseFloat(document.getElementById("km").value);
+            let liters = parseFloat(document.getElementById("liters").value);
+
+            if (isNaN(price) || isNaN(km) || isNaN(liters) || liters === 0) {
+                document.getElementById("output").innerHTML = "Please enter valid values.";
+                return;
+            }
+
+            let kmPerLiter = km / liters;
+            let costPerKm = price / kmPerLiter;
+            let kmPerEuro = 1 / costPerKm;
+
+            let outputText =
+                "Kilometers covered in one liter: " + kmPerLiter.toFixed(2) + " km<br>" +
+                "One kilometer cost: " + costPerKm.toFixed(2) + " euro<br>" +
+                "In one euro it will cover: " + kmPerEuro.toFixed(2) + " km";
+
+            document.getElementById("output").innerHTML = outputText;
+
+            saveHistory(kmPerLiter, costPerKm, kmPerEuro);
+
+            drawGraph(costPerKm);
+        }
+
+        function drawGraph(costPerKm) {
+            let distances = [];
+            let costs = [];
+
+            for (let d = 0; d <= 50; d += 5) {
+                distances.push(d);
+                costs.push((d * costPerKm).toFixed(2));
+            }
+
+            let ctx = document.getElementById("costChart").getContext("2d");
+
+            if (chart) chart.destroy();
+
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: distances,
+                    datasets: [{
+                        label: "Cost vs Distance (Euro)",
+                        data: costs,
+                        borderColor: "#007acc",
+                        backgroundColor: "rgba(0, 122, 204, 0.2)",
+                        borderWidth: 2,
+                        tension: 0.2
+                    }]
+                },
+                options: {
+                    scales: {
+                        x: {
+                            title: { display: true, text: "Distance (km)" }
+                        },
+                        y: {
+                            title: { display: true, text: "Cost (Euro)" }
+                        }
+                    }
+                }
+            });
+        }
+
+        function saveHistory(kmPerLiter, costPerKm, kmPerEuro) {
+            let dateTime = new Date().toLocaleString();
+
+            let entry = {
+                date: dateTime,
+                kmPerLiter: kmPerLiter.toFixed(2),
+                costPerKm: costPerKm.toFixed(2),
+                kmPerEuro: kmPerEuro.toFixed(2)
+            };
+
+            let history = JSON.parse(localStorage.getItem("fuelHistory")) || [];
+            history.unshift(entry);
+
+            localStorage.setItem("fuelHistory", JSON.stringify(history));
+
+            loadHistory();
+        }
+
+        function loadHistory() {
+            let history = JSON.parse(localStorage.getItem("fuelHistory")) || [];
+            let html = "";
+
+            history.forEach(item => {
+                html += 
+                    "<p><strong>" + item.date + "</strong><br>" +
+                    "Km/L: " + item.kmPerLiter + 
+                    " | Cost/km: " + item.costPerKm +
+                    " | Km/€: " + item.kmPerEuro +
+                    "</p>";
+            });
+
+            document.getElementById("historyList").innerHTML = html;
+        }
+
+        function clearHistory() {
+            localStorage.removeItem("fuelHistory");
+            document.getElementById("historyList").innerHTML = "";
+        }
+
+        function resetForm() {
+            document.getElementById("price").value = "";
+            document.getElementById("km").value = "";
+            document.getElementById("liters").value = "";
+            document.getElementById("output").innerHTML = "";
+
+            if (chart) chart.destroy();
+        }
+
+        window.onload = loadHistory;
+    </script>
+
+</body>
+</html>
